@@ -35,8 +35,8 @@ void mqttLoop();
 void messageReceived(String &topic, String &payload);
 
 // LED Vars
-const int ledBankAPin = 18;
-const int ledBankBPin = 19;
+const int ledBankAPin = 25;
+const int ledBankBPin = ;
 bool ledEnabled = false;
 int ledDuty = 50; // 0 - 50
 int minSinDuty = 0;
@@ -47,13 +47,16 @@ int prevAnimMillis = 0;
 int animationTime = 4000;
 bool ledAnimEnabled = false;
 int curAnimTime = 0;
-void ledEnable();
-void ledDisable();
 void handleLeds();
 void setDutyCycle(int duty);
 double getCurRads();
 int sinDimMap(double rads);
 void initLeds();
+
+// Status Update
+const uint statusInterval = 3000;
+unsigned long statusPrevMillis = 0;
+void sendStatus();
 
 /**
  * @brief
@@ -74,6 +77,7 @@ void setup()
   initOta();
   initMqtt();
   initLeds();
+  sendStatus();
 }
 
 /**
@@ -90,6 +94,12 @@ void loop()
   otaLoop();
   mqttLoop();
   handleLeds();
+
+  if (millis() - statusPrevMillis > statusInterval)
+  {
+    sendStatus();
+    statusPrevMillis = millis();
+  }
 }
 
 /**
@@ -99,15 +109,25 @@ void loop()
 void initPreferences()
 {
   preferences.begin(preferencesNamespace, false);
+  ledEnabled = preferences.getBool("ledEnabled", false);
   ledDuty = preferences.getUInt("ledDuty", 50); // Default LED Duty
+  ledAnimEnabled = preferences.getBool("ledAnimEnabled", false);
+  minSinDuty = preferences.getUInt("minSinDuty", 0);
+  maxSinDuty = preferences.getUInt("maxSinDuty", 50);
+  animationTime = preferences.getUInt("animationTime", 4000);
+
+  Serial.print("LED State From Preferences: ");
+  Serial.println(ledEnabled);
   Serial.print("LED Duty From Preferences: ");
   Serial.println(ledDuty);
-  // minPressure = preferences.getUInt("minPressure", 99000); // Default Min Pressure
-  // maxPressure = preferences.getUInt("maxPressure", 99450); // Default Max Pressure
-  // Serial.print("Min Pressure From Preferences: ");
-  // Serial.println(minPressure);
-  // Serial.print("Max Pressure From Preferences: ");
-  // Serial.println(maxPressure);
+  Serial.print("LED Anim Enabled From Preferences: ");
+  Serial.println(ledAnimEnabled);
+  Serial.print("Min Sin Duty From Preferences: ");
+  Serial.println(minSinDuty);
+  Serial.print("Max Sin Duty From Preferences: ");
+  Serial.println(maxSinDuty);
+  Serial.print("LED Anim Time From Preferences: ");
+  Serial.println(animationTime);
 }
 
 /**
@@ -199,7 +219,7 @@ void mqttConnect()
 {
 
   Serial.print("\nconnecting...");
-  while (!client.connect("arduino", "public", "public"))
+  while (!client.connect(hostName.c_str(), "public", "public"))
   {
     Serial.print(".");
     delay(1000);
@@ -226,7 +246,7 @@ void mqttConnect()
  */
 void messageReceived(String &topic, String &payload)
 {
-  Serial.println("incoming: " + topic + " - " + payload);
+  // Serial.println("incoming: " + topic + " - " + payload);
 
   // Note: Do not use the client in the callback to publish, subscribe or
   // unsubscribe as it may cause deadlocks when other things arrive while
@@ -234,49 +254,67 @@ void messageReceived(String &topic, String &payload)
   // or push to a queue and handle it in the loop after calling `client.loop()`.
   if (topic == "/ledEnable")
   {
-    ledEnable();
-    Serial.println("LED Enabled");
+    ledEnabled = true;
+    // Serial.println("LED Enabled");
+    preferences.putBool("ledEnabled", ledEnabled);
+    // client.publish("/ledState", String(ledEnabled));
   }
   else if (topic == "/ledDisable")
   {
-    ledDisable();
-    Serial.println("LED Disabled");
+    ledEnabled = false;
+    // Serial.println("LED Disabled");
+    preferences.putBool("ledEnabled", ledEnabled);
+    // client.publish("/ledState", String(ledEnabled));
   }
   else if (topic == "/setLedDuty")
   {
-    Serial.print("New LED Duty: ");
-    Serial.println(payload);
+    // Serial.print("New LED Duty: ");
+    // Serial.println(payload);
     ledDuty = payload.toInt();
     preferences.putUInt("ledDuty", ledDuty);
+    // client.publish("/ledDutyState", String(ledDuty));
   }
   else if (topic == "/ledAnimEnable")
   {
-    Serial.println("LED Animation Enabled");
+    // Serial.println("LED Animation Enabled");
     ledAnimEnabled = true;
+    preferences.putBool("ledAnimEnabled", ledAnimEnabled);
+    // client.publish("/ledAnimState", String(ledAnimEnabled));
   }
   else if (topic == "/ledAnimDisable")
   {
-    Serial.println("LED Animation Disabled");
+    // Serial.println("LED Animation Disabled");
     ledAnimEnabled = false;
+    preferences.putBool("ledAnimEnabled", ledAnimEnabled);
+    // client.publish("/ledAnimState", String(ledAnimEnabled));
   }
   else if (topic == "/setMinSinDuty")
   {
-    Serial.print("New min sin Duty: ");
-    Serial.println(payload);
+    // Serial.print("New min sin Duty: ");
+    // Serial.println(payload);
     minSinDuty = payload.toInt();
+    preferences.putUInt("minSinDuty", minSinDuty);
+    // client.publish("/minSinDutyState", String(minSinDuty));
   }
   else if (topic == "/setMaxSinDuty")
   {
-    Serial.print("New max sin Duty: ");
-    Serial.println(payload);
+    // Serial.print("New max sin Duty: ");
+    // Serial.println(payload);
     maxSinDuty = payload.toInt();
+    preferences.putUInt("maxSinDuty", maxSinDuty);
+    // client.publish("/maxSinDutyState", String(maxSinDuty));
   }
   else if (topic == "/setAnimTime")
   {
-    Serial.print("New animation time: ");
-    Serial.println(payload);
+    // Serial.print("New animation time: ");
+    // Serial.println(payload);
     animationTime = payload.toInt();
+    preferences.putUInt("animationTime", animationTime);
+    // client.publish("/animTimeState", String(animationTime));
   }
+
+  // Debounce send status after new input received
+  statusPrevMillis = millis();
 }
 
 /**
@@ -310,12 +348,12 @@ void mqttLoop()
  */
 void sendStatus()
 {
-  // String pressureMessage = String(curPressure, 4);
-  // client.publish("/pressure", pressureMessage);
-  // String tempMessage = String(curTemp, 4);
-  // client.publish("/temp", tempMessage);
-  // String altitudeMessage = String(curAltitude);
-  // client.publish("/altitude", altitudeMessage);
+  client.publish("/ledState", String(ledEnabled));
+  client.publish("/ledDutyState", String(ledDuty));
+  client.publish("/ledAnimState", String(ledAnimEnabled));
+  client.publish("/minSinDutyState", String(minSinDuty));
+  client.publish("/maxSinDutyState", String(maxSinDuty));
+  client.publish("/animTimeState", String(animationTime));
 }
 
 /**
@@ -352,24 +390,6 @@ void initLeds()
   mcpwm_sync_configure(MCPWM_UNIT_0, MCPWM_TIMER_1, &sync_config);
 
   printf("mcpwm config finished...\n");
-}
-
-/**
- * @brief
- *
- */
-void ledEnable()
-{
-  ledEnabled = true;
-}
-
-/**
- * @brief
- *
- */
-void ledDisable()
-{
-  ledEnabled = false;
 }
 
 /**
