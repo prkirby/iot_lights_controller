@@ -21,6 +21,7 @@ const char mqttBroker[] = MQTT_BROKER;
 const char hostNamePrefix[] = "IOT_LIGHTS_";
 const char lightsID[] = LIGHTS_ID;
 const String hostName = String(hostNamePrefix) + String(lightsID);
+const String topicPrefix = "/LIGHTING/" + String(lightsID);
 const char otaPass[] = OTA_PASS;
 const int otaPort = OTA_PORT;
 WiFiClient net;
@@ -36,7 +37,7 @@ void messageReceived(String &topic, String &payload);
 
 // LED Vars
 const int ledBankAPin = 25;
-const int ledBankBPin = ;
+const int ledBankBPin = 26;
 bool ledEnabled = false;
 int ledDuty = 50; // 0 - 50
 int minSinDuty = 0;
@@ -227,15 +228,15 @@ void mqttConnect()
 
   Serial.println("\nconnected!");
 
-  client.subscribe("/hello");
-  client.subscribe("/ledEnable");
-  client.subscribe("/ledDisable");
-  client.subscribe("/setLedDuty");
-  client.subscribe("/ledAnimEnable");
-  client.subscribe("/ledAnimDisable");
-  client.subscribe("/setMinSinDuty");
-  client.subscribe("/setMaxSinDuty");
-  client.subscribe("/setAnimTime");
+  client.subscribe(topicPrefix + "/hello");
+  client.subscribe(topicPrefix + "/ledEnable");
+  client.subscribe(topicPrefix + "/ledDisable");
+  client.subscribe(topicPrefix + "/setLedDuty");
+  client.subscribe(topicPrefix + "/ledAnimEnable");
+  client.subscribe(topicPrefix + "/ledAnimDisable");
+  client.subscribe(topicPrefix + "/setMinSinDuty");
+  client.subscribe(topicPrefix + "/setMaxSinDuty");
+  client.subscribe(topicPrefix + "/setAnimTime");
 }
 
 /**
@@ -252,6 +253,8 @@ void messageReceived(String &topic, String &payload)
   // unsubscribe as it may cause deadlocks when other things arrive while
   // sending and receiving acknowledgments. Instead, change a global variable,
   // or push to a queue and handle it in the loop after calling `client.loop()`.
+  topic.replace(topicPrefix, "");
+
   if (topic == "/ledEnable")
   {
     ledEnabled = true;
@@ -348,12 +351,12 @@ void mqttLoop()
  */
 void sendStatus()
 {
-  client.publish("/ledState", String(ledEnabled));
-  client.publish("/ledDutyState", String(ledDuty));
-  client.publish("/ledAnimState", String(ledAnimEnabled));
-  client.publish("/minSinDutyState", String(minSinDuty));
-  client.publish("/maxSinDutyState", String(maxSinDuty));
-  client.publish("/animTimeState", String(animationTime));
+  client.publish(topicPrefix + "/ledState", String(ledEnabled));
+  client.publish(topicPrefix + "/ledDutyState", String(ledDuty));
+  client.publish(topicPrefix + "/ledAnimState", String(ledAnimEnabled));
+  client.publish(topicPrefix + "/minSinDutyState", String(minSinDuty));
+  client.publish(topicPrefix + "/maxSinDutyState", String(maxSinDuty));
+  client.publish(topicPrefix + "/animTimeState", String(animationTime));
 }
 
 /**
