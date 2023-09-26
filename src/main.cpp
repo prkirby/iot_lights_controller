@@ -55,9 +55,10 @@ int sinDimMap(double rads);
 void initLeds();
 
 // Status Update
-const uint statusInterval = 3000;
+const uint statusBuffer = 500; // Delay time before returning status after an input is received
 unsigned long statusPrevMillis = 0;
 void sendStatus();
+bool statusPending = false;
 
 /**
  * @brief
@@ -95,12 +96,7 @@ void loop()
   otaLoop();
   mqttLoop();
   handleLeds();
-
-  if (millis() - statusPrevMillis > statusInterval)
-  {
-    sendStatus();
-    statusPrevMillis = millis();
-  }
+  sendStatus();
 }
 
 /**
@@ -237,6 +233,7 @@ void mqttConnect()
   client.subscribe(topicPrefix + "/setMinSinDuty");
   client.subscribe(topicPrefix + "/setMaxSinDuty");
   client.subscribe(topicPrefix + "/setAnimTime");
+  client.subscribe(topicPrefix + "/getStatus");
 }
 
 /**
@@ -315,6 +312,10 @@ void messageReceived(String &topic, String &payload)
     preferences.putUInt("animationTime", animationTime);
     // client.publish("/animTimeState", String(animationTime));
   }
+  else if (topic == "/getStatus")
+  {
+    statusPending = true;
+  }
 
   // Debounce send status after new input received
   statusPrevMillis = millis();
@@ -351,12 +352,17 @@ void mqttLoop()
  */
 void sendStatus()
 {
-  client.publish(topicPrefix + "/ledState", String(ledEnabled));
-  client.publish(topicPrefix + "/ledDutyState", String(ledDuty));
-  client.publish(topicPrefix + "/ledAnimState", String(ledAnimEnabled));
-  client.publish(topicPrefix + "/minSinDutyState", String(minSinDuty));
-  client.publish(topicPrefix + "/maxSinDutyState", String(maxSinDuty));
-  client.publish(topicPrefix + "/animTimeState", String(animationTime));
+  if (statusPending && millis() - statusPrevMillis > statusBuffer)
+  {
+    client.publish(topicPrefix + "/ledState", String(ledEnabled));
+    client.publish(topicPrefix + "/ledDutyState", String(ledDuty));
+    client.publish(topicPrefix + "/ledAnimState", String(ledAnimEnabled));
+    client.publish(topicPrefix + "/minSinDutyState", String(minSinDuty));
+    client.publish(topicPrefix + "/maxSinDutyState", String(maxSinDuty));
+    client.publish(topicPrefix + "/animTimeState", String(animationTime));
+    statusPrevMillis = millis();
+    statusPending = false;
+  }
 }
 
 /**
