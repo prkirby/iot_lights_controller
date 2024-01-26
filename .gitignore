@@ -5,3 +5,4 @@
 .vscode/ipch
 config.h
 otaconfig.ini
+.DS_Store
