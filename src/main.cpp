@@ -26,6 +26,7 @@ const char otaPass[] = OTA_PASS;
 const int otaPort = OTA_PORT;
 WiFiClient net;
 MQTTClient client;
+int mqttKeepAlive = 300; // 5 min
 unsigned long lastMillis = 0;
 void mqttConnect();
 void initWifi();
@@ -202,6 +203,7 @@ void initMqtt()
 {
   // Note: Local domain names (e.g. "Computer.local" on OSX) are not supported
   // by Arduino. You need to set the IP address directly.
+  client.setKeepAlive(mqttKeepAlive);
   client.begin(mqttBroker, net);
   client.onMessage(messageReceived);
 
@@ -216,10 +218,16 @@ void mqttConnect()
 {
 
   Serial.print("\nconnecting...");
+  unsigned long mqttWaitTime = 120000; // Wait two minutes before restarting
   while (!client.connect(hostName.c_str(), "public", "public"))
   {
     Serial.print(".");
     delay(1000);
+    if (millis() >= mqttWaitTime)
+    {
+      Serial.print("Unable to connect to MQTT Broker. Restarting...");
+      ESP.restart();
+    }
   }
 
   Serial.println("\nconnected!");
